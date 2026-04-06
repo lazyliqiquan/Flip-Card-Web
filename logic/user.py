@@ -95,9 +95,7 @@ def create_user(user_data: UserRequest):
         conn.commit()
 
         # 返回创建成功信息
-        return {
-            "message": "用户创建成功",
-        }
+        return {'code': 0}
 
     except HTTPException:
         # 重新抛出 HTTP 异常
@@ -143,7 +141,7 @@ def get_user_info(username: str):
 
         # 返回用户信息
         return {
-            "message": "获取用户信息成功",
+            'code': 0,
             "user_info": user_info
         }
 
@@ -186,7 +184,7 @@ def delete_user(username: str):
         conn.commit()
 
         # 返回删除成功信息
-        return {"message": "用户删除成功"}
+        return {'code': 0}
 
     except HTTPException:
         # 重新抛出 HTTP 异常
@@ -226,7 +224,7 @@ def get_all_users():
 
         # 返回用户列表
         return {
-            "message": "获取用户列表成功",
+            'code': 0,
             "users": user_list
         }
 
