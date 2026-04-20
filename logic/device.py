@@ -1,114 +1,82 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
-from datetime import datetime
-from logic.init_db import get_db_connection, close_db_connection
+from logic.mqtt import mqtt
+from logic.config import MQTT
+import asyncio
+from threading import Lock
 
+# ==================== 全局安全存储：每个请求独立结果 ====================
+result_map = {}  # key: request_id, value: 设备返回的数据
+lock = Lock()  # 一把锁保护整个字典，线程安全
+
+# 路由器
 router = APIRouter(
-    prefix="/user",  # 路由前缀
-    tags=["user"],  # 标签，用于 API 文档分组
+    prefix="/device",  # 路由前缀
+    tags=["device"],  # 标签，用于 API 文档分组
 )
 
 
-class UserRequest(BaseModel):
-    """登录请求模型"""
-    username: str
-    password: str
-
-
-@router.post("/login")
-def login(login_data: UserRequest):
-    """用户登录"""
-    conn = None
+# ==================== MQTT 接收回调（多设备安全） ====================
+def handle_receive_msg(topic, payload):
     try:
-        # 获取数据库连接
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # topic = "device/esp32_001/state"
+        parts = topic.split("/")  # 切成列表: ["device", "esp32_001", "state"]
+        device_id = parts[1]  # 直接拿到设备编号！
+        # 把设备返回的结果 存入对应 device_id
+        with lock:
+            result_map[device_id] = payload
 
-        # 直接在 SQL 查询中验证用户名和密码
-        cursor.execute(
-            "SELECT root, id FROM users WHERE username = ? AND password = ?",
-            (login_data.username, login_data.password))
-        user = cursor.fetchone()
+        print(f"✅ 设备返回 | device_id={device_id} | data={payload}")
 
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
-            )
-
-        # 获取用户信息
-        is_root = user["root"]
-        user_id = user["id"]
-
-        # 生成格式化的登录时间字符串
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # 更新登录时间
-        cursor.execute("UPDATE users SET login_time = ? WHERE id = ?", (current_time, user_id))
-        conn.commit()
-
-        # 返回登录成功信息
-        return {
-            "message": "登录成功",
-            "is_root": bool(is_root)
-        }
-
-    except HTTPException:
-        # 重新抛出 HTTP 异常
-        raise
     except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"登录失败: {str(e)}"
-        )
-    finally:
-        # 关闭数据库连接
-        close_db_connection(conn)
+        print("❌ MQTT 解析错误:", e)
 
 
-@router.post("/create")
-def create_user(user_data: UserRequest):
-    """创建用户"""
-    conn = None
-    try:
-        # 获取数据库连接
-        conn = get_db_connection()
-        cursor = conn.cursor()
+# 先设置，在连接，确保回调函数生效！
+mqtt.set_receive_callback(handle_receive_msg)
+mqtt.connect()
+mqtt.subscribe(MQTT.SUB_TOPIC)
 
-        # 检查用户名是否已存在
-        cursor.execute("SELECT id FROM users WHERE username = ?", (user_data.username,))
-        existing_user = cursor.fetchone()
 
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在"
-            )
+# ==================== 设备控制模型 ====================
+class DeviceRequest(BaseModel):
+    """设备请求模型"""
+    device_id: str  # 设备编号，例如 liqiquan
+    cmd: str = ""  # 指令，例如 0 表示时间模式；1 表示日期模式 2 表示显示文本模式 3 表示计算模式 4 表示查询设备状态
 
-        # 插入新用户
-        cursor.execute(
-            "INSERT INTO users (username, password, root) VALUES (?, ?, ?)",
-            (user_data.username, user_data.password, 0)
-        )
-        conn.commit()
 
-        # 返回创建成功信息
-        return {
-            "message": "用户创建成功",
-        }
+# ==================== 设备控制路由 ====================
+@router.post("/control")
+async def control(device_data: DeviceRequest):
+    """设备控制"""
+    # 先占位（表示正在等待）
+    with lock:
+        result_map[device_data.device_id] = None
 
-    except HTTPException:
-        # 重新抛出 HTTP 异常
-        raise
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建用户失败: {str(e)}"
-        )
-    finally:
-        # 关闭数据库连接
-        close_db_connection(conn)
+    # 发送指令
+    mqtt.publish(f"{MQTT.PUB_TOPIC}/{device_data.device_id}", device_data.cmd)
+
+    # ==================== 核心：安全等待 5 秒，不会断开 ====================
+    timeout = MQTT.WAIT_TIMEOUT  # 总等待时间
+    interval = 0.5  # 每0.5秒检查一次
+    max_cycles = int(timeout / interval)
+
+    for _ in range(max_cycles):
+        # 检查是否收到结果
+        with lock:
+            res = result_map.get(device_data.device_id)
+            if res is not None:
+                del result_map[device_data.device_id]
+                return {"code": 0, "msg": res}
+
+        # 【关键】每0.5秒等待一次，让连接保持活跃，不断开
+        await asyncio.sleep(interval)
+
+    # 超时清理占位（删除 result_map 中的 None）
+    with lock:
+        result_map.pop(device_data.device_id, None)
+
+    return {
+        "code": 1,
+        "msg": f"设备响应超时（{MQTT.WAIT_TIMEOUT}秒）"
+    }
