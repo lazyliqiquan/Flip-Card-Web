@@ -120,12 +120,10 @@ def get_user_info(username: str):
         # 获取数据库连接
         conn = get_db_connection()
         cursor = conn.cursor()
-        print(1)
         # 查询用户信息
         cursor.execute(
             "SELECT id, username, password, login_time FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
-        print(2)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

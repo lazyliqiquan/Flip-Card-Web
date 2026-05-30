@@ -19,8 +19,8 @@ router = APIRouter(
 # ==================== MQTT 接收回调（多设备安全） ====================
 def handle_receive_msg(topic, payload):
     try:
-        # topic = "device/esp32_001/state"
-        parts = topic.split("/")  # 切成列表: ["device", "esp32_001", "state"]
+        # topic = clock/liqiquan/status
+        parts = topic.split("/")  # 切成列表: [clock/liqiquan/status]
         device_id = parts[1]  # 直接拿到设备编号！
         # 把设备返回的结果 存入对应 device_id
         with lock:
@@ -42,7 +42,7 @@ mqtt.subscribe(MQTT.SUB_TOPIC)
 class DeviceRequest(BaseModel):
     """设备请求模型"""
     device_id: str  # 设备编号，例如 liqiquan
-    cmd: str = ""  # 指令，例如 0 表示时间模式；1 表示日期模式 2 表示显示文本模式 3 表示计算模式 4 表示查询设备状态
+    cmd: str = ""  # 指令，例如 0 表示时间模式；1 表示日期模式 2 表示显示文本模式 3 表示计算模式 4 表示查询设备状态 5 修改设备wifi配置[5ssid$password]
 
 
 # ==================== 设备控制路由 ====================
