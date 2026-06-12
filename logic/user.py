@@ -68,6 +68,7 @@ def login(login_data: UserRequest):
         close_db_connection(conn)
 
 
+# 首个创建的用户赋予root权限(1)，后续用户普通权限(0)
 @router.post("/create")
 def create_user(user_data: UserRequest):
     """创建用户"""
@@ -87,10 +88,16 @@ def create_user(user_data: UserRequest):
                 detail="用户名已存在"
             )
 
+        # 2. 查询表中现有用户总数，判断是否为第一个用户
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+        # 首个用户赋予root权限(1)，后续用户普通权限(0)
+        root_flag = 1 if user_count == 0 else 0
+
         # 插入新用户
         cursor.execute(
             "INSERT INTO users (username, password, login_time, root) VALUES (?, ?, ?, ?)",
-            (user_data.username, user_data.password, '', 0)
+            (user_data.username, user_data.password, '', root_flag)
         )
         conn.commit()
 
@@ -125,15 +132,11 @@ def get_user_info(username: str):
             "SELECT id, username, password, login_time FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="用户不存在"
-            )
+            return {'code': 0}
 
         # 构建返回结果
         user_info = {
             "username": user["username"],
-            "password": user["password"],
             "login_time": user["login_time"]
         }
 
@@ -172,10 +175,7 @@ def delete_user(username: str):
         user = cursor.fetchone()
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="用户不存在"
-            )
+            return {'code': 0}
 
         # 删除用户
         cursor.execute("DELETE FROM users WHERE username = ?", (username,))

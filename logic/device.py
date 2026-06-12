@@ -56,7 +56,7 @@ async def control(device_data: DeviceRequest):
     # 发送指令
     mqtt.publish(f"{MQTT.PUB_TOPIC}/{device_data.device_id}", device_data.cmd)
 
-    # ==================== 核心：安全等待 5 秒，不会断开 ====================
+    # ==================== 核心：安全等待 10 秒，不会断开 ====================
     timeout = MQTT.WAIT_TIMEOUT  # 总等待时间
     interval = 0.5  # 每0.5秒检查一次
     max_cycles = int(timeout / interval)

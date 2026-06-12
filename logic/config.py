@@ -12,4 +12,4 @@ class MQTT:
     PASSWORD = "lazyman"  # MQTT 密码
     PUB_TOPIC = 'clock/control'  # 后面需要添加设备ID，例如 'clock/control/liqiquan'
     SUB_TOPIC = 'clock/+/status'  # 订阅主题，接受所有设备的状态更新，例如 'clock/liqiquan/status'
-    WAIT_TIMEOUT = 5  # 等待esp32设备响应超时时间（秒）
+    WAIT_TIMEOUT = 10  # 等待esp32设备响应超时时间（秒）
