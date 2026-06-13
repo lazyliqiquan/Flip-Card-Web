@@ -12,7 +12,6 @@ router = APIRouter(
 class UserRequest(BaseModel):
     """登录请求模型"""
     username: str
-    password: str
 
 
 @router.post("/login")
@@ -25,16 +24,11 @@ def login(login_data: UserRequest):
         cursor = conn.cursor()
 
         # 直接在 SQL 查询中验证用户名和密码
-        cursor.execute(
-            "SELECT root, id FROM users WHERE username = ? AND password = ?",
-            (login_data.username, login_data.password))
+        cursor.execute("SELECT root, id FROM users WHERE username = ?", (login_data.username,))
         user = cursor.fetchone()
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
-            )
+            return {'code': 1}
 
         # 获取用户信息
         is_root = user["root"]
@@ -59,10 +53,7 @@ def login(login_data: UserRequest):
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"登录失败: {str(e)}"
-        )
+        return {'code': 1, 'detail': f"登录失败: {str(e)}"}
     finally:
         # 关闭数据库连接
         close_db_connection(conn)
@@ -83,10 +74,7 @@ def create_user(user_data: UserRequest):
         existing_user = cursor.fetchone()
 
         if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在"
-            )
+            return {'code': 0}
 
         # 2. 查询表中现有用户总数，判断是否为第一个用户
         cursor.execute("SELECT COUNT(*) FROM users")
@@ -96,8 +84,8 @@ def create_user(user_data: UserRequest):
 
         # 插入新用户
         cursor.execute(
-            "INSERT INTO users (username, password, login_time, root) VALUES (?, ?, ?, ?)",
-            (user_data.username, user_data.password, '', root_flag)
+            "INSERT INTO users (username, login_time, root) VALUES (?, ?, ?)",
+            (user_data.username, '', root_flag)
         )
         conn.commit()
 
@@ -110,10 +98,7 @@ def create_user(user_data: UserRequest):
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建用户失败: {str(e)}"
-        )
+        return {'code': 1, 'detail': f"创建用户失败: {str(e)}"}
     finally:
         # 关闭数据库连接
         close_db_connection(conn)
@@ -129,7 +114,7 @@ def get_user_info(username: str):
         cursor = conn.cursor()
         # 查询用户信息
         cursor.execute(
-            "SELECT id, username, password, login_time FROM users WHERE username = ?", (username,))
+            "SELECT id, username, login_time FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         if not user:
             return {'code': 0}
@@ -152,10 +137,7 @@ def get_user_info(username: str):
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取用户信息失败: {str(e)}"
-        )
+        return {'code': 1, 'detail': f"获取用户信息失败: {str(e)}"}
     finally:
         # 关闭数据库连接
         close_db_connection(conn)
@@ -170,12 +152,16 @@ def delete_user(username: str):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 检查用户是否存在
-        cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+        # 检查用户是否存在且不是root用户
+        cursor.execute("SELECT id, root FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
 
         if not user:
             return {'code': 0}
+
+        # root用户不能删除
+        if user[1] == 1:
+            return {'code': 1}
 
         # 删除用户
         cursor.execute("DELETE FROM users WHERE username = ?", (username,))
@@ -190,10 +176,7 @@ def delete_user(username: str):
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"删除用户失败: {str(e)}"
-        )
+        return {'code': 1, 'detail': f"删除用户失败: {str(e)}"}
     finally:
         # 关闭数据库连接
         close_db_connection(conn)
@@ -232,10 +215,7 @@ def get_all_users():
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取用户列表失败: {str(e)}"
-        )
+        return {'code': 1, 'detail': f"获取用户列表失败: {str(e)}"}
     finally:
         # 关闭数据库连接
         close_db_connection(conn)

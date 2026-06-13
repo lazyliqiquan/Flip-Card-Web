@@ -22,7 +22,6 @@ def create_database():
     CREATE TABLE IF NOT EXISTS {DB.USERS_TABLE} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
         login_time TEXT NOT NULL,
         root BOOLEAN DEFAULT FALSE
     )

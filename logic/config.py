@@ -13,3 +13,10 @@ class MQTT:
     PUB_TOPIC = 'clock/control'  # 后面需要添加设备ID，例如 'clock/control/liqiquan'
     SUB_TOPIC = 'clock/+/status'  # 订阅主题，接受所有设备的状态更新，例如 'clock/liqiquan/status'
     WAIT_TIMEOUT = 10  # 等待esp32设备响应超时时间（秒）
+
+
+# 密钥配置
+class Secret:
+    # 密钥、偏移向量（和JS保持一致）
+    SECRET_KEY = '7s9K2pR5xQ8bZ1vG'
+    SECRET_IV = 'dF3hJ6nL0tU7mC4e'

@@ -3,9 +3,6 @@ from logic.user import router as user_router
 from logic.device import router as device_router
 from fastapi.middleware.cors import CORSMiddleware
 
-
-
-
 app = FastAPI(
     title="Flip Card API",
     version="1.0.0"
@@ -16,6 +13,7 @@ app.include_router(user_router)
 app.include_router(device_router)
 
 # 配置跨域
+# FIXME 生产环境需要具体指定允许的域名
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 允许所有域名，生产环境改具体前端地址
