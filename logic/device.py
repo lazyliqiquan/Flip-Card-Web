@@ -1,5 +1,3 @@
-from typing import Dict
-
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from logic.mqtt import mqtt
